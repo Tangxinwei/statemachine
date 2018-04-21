@@ -44,14 +44,15 @@ class StateNode(object):
 			ret.append(node.GetCurrentActiveNodesName())
 		return ret
 
+	def OnActiveStateMachine(self):
+		self.On_Entry()
+		for node in self._activeNodeList:
+			node.OnActiveStateMachine()
+
 	#isFirst表示是否首次激活
-	def On_Entry(self, isFirst = False):
+	def On_Entry(self):
 		self._isActive = True
 		self._machine.TriggerEvent(self._name, "Entry")
-		if isFirst:
-			for node in self._defaultChildNodeList:
-				self._activeNodeList.append(node)
-				node.On_Entry(True)
 
 	def On_Exit(self):
 		self._isActive = False
@@ -66,7 +67,7 @@ class StateNode(object):
 		self.On_Entry()
 		if self._keepHistory:
 			for node in self._activeNodeList:
-				self.TriggerAllEntry()
+				node.TriggerAllEntry()
 		else:
 			self._activeNodeList.clear()
 			for node in self._defaultChildNodeList:
@@ -136,9 +137,9 @@ class StateNode(object):
 							nowNode.On_Entry()
 					elif len(nowNode._activeNodeList) > 1:
 						#节点允许并行,并行的节点是不可能跨节点转移的..
-						raise Exception("cannot transist")
+						raise Exception("cannot transist %s" % nowNode._name)
 					else:
-						raise Exception("no active nodes")
+						raise Exception("no active nodes %s" % nowNode._name)
 				pathList[0].TriggerAllEntry()
 		else:
 			for node in self._activeNodeList:

@@ -3,10 +3,9 @@ import StateNode
 
 class StateMachine(object):
 	def __init__(self):
-		self._activeNode = None
 		self._eventObjectList = []
-		self._AllNodes = {}
-		self._ActiveNodeList = []
+		self._allNodes = {}
+		self._activeNodeList = []
 		self._isTransition = False
 
 	def AddEventObject(self, eventObject):
@@ -14,82 +13,122 @@ class StateMachine(object):
 
 	def GetCurrentActiveNodesName(self):
 		ret = []
-		for node in self._ActiveNodeList:
+		for node in self._activeNodeList:
 			ret.append(node.GetCurrentActiveNodesName())
 		return ret
 
 	def CreateStateNode(self, name, keepHistory = False, isDefault = False):
-		if name in self._AllNodes:
+		if name in self._allNodes:
 			raise Exception("%s has exits" % name)
 		node = StateNode.StateNode(name, keepHistory, isDefault)
 		node.OnAddToStateMachine(self)
-		self._AllNodes[name] = node
+		self._allNodes[name] = node
 		return node
 
 	def TriggerEvent(self, stateName, eventName):
 		print(stateName, eventName)
 
 	def ActiveStateMachine(self):
-		for name, node in self._AllNodes.items():
+		for name, node in self._allNodes.items():
+			#一开始就初始化activenodes为defaultnodes
+			if node._defaultChildNodeList:
+				for cnode in node._defaultChildNodeList:
+					node._activeNodeList.append(cnode)
 			if not node.HasParent() and node.CheckIsDefault():
-				self._ActiveNodeList.append(node)
-				node.On_Entry(True)
+				self._activeNodeList.append(node)
+				node.OnActiveStateMachine()
 
 	def ReceiveTransitionEvent(self, eventName):
 		self._isTransition = True
-		for node in self._ActiveNodeList:
+		for node in self._activeNodeList:
 			node.ReceiveTransitionEvent(eventName)
 		self._isTransition = False
 
+	def InitFromConfig(self, config):
+		for nodeParam in config["nodes"]:
+			self.CreateStateNode(nodeParam["name"], nodeParam.get("keepHistory", False), nodeParam.get("isDefault", False))
+		for parentName, childrenNames in config.get("relations", {}).items():
+			parentNode = self._allNodes[parentName]
+			for nodename in childrenNames:
+				node = self._allNodes[nodename]
+				parentNode.AddChildNode(node)
+		for sourceNodeName, eventName, targetNodeName in config.get("transitions", []):
+			sourceNode = self._allNodes[sourceNodeName]
+			targetNode = self._allNodes[targetNodeName]
+			sourceNode.AddTransition(eventName, targetNode)
+		machine.ActiveStateMachine()
+
 '''
-	locomotion
-		normal
-			idle
-			move
+	locomotion  default keephistory
+		normal   default
+			idle  default keephistory
+				idle_special concurrence default
+					idle_special_1 default
+					idle_special_2 default
+				idle_normal
+			move  keephistory
+				move_normal   default
+				move_fast
 		nonemove
-	behavior
+	behavior   default
 		skill
 		forcetrans
-			blow
+			blow   default
 			knockdown
-		behavioridle
+		behavioridle default
 '''
 if __name__ == "__main__":
 	machine = StateMachine()
-	locomotion = machine.CreateStateNode("locomotion", isDefault = True)
-	normal = machine.CreateStateNode("normal", isDefault = True)
-	idle = machine.CreateStateNode("idle", isDefault = True)
-	move = machine.CreateStateNode("move", isDefault = True)
-	nonemove = machine.CreateStateNode("nonemove")
-	behavior = machine.CreateStateNode("behavior", isDefault = True)
-	skill = machine.CreateStateNode("skill")
-	forcetrans = machine.CreateStateNode("forcetrans", keepHistory = True, isDefault = True)
-	blow = machine.CreateStateNode("blow", isDefault = True)
-	knockdown = machine.CreateStateNode("knockdown")
-	behavioridle = machine.CreateStateNode("behavioridle")
-
-	locomotion.AddChildNode(normal)
-	locomotion.AddChildNode(nonemove)
-
-	normal.AddChildNode(idle)
-	normal.AddChildNode(move)
-
-	behavior.AddChildNode(skill)
-	behavior.AddChildNode(forcetrans)
-	behavior.AddChildNode(behavioridle)
-
-	forcetrans.AddChildNode(blow)
-	forcetrans.AddChildNode(knockdown)
-
-	idle.AddTransition("NoneMove", nonemove)
-	nonemove.AddTransition("ToMove", move)
-	nonemove.AddTransition("ToNormal", normal)
-
-	machine.ActiveStateMachine()
-	print("-------")
-	machine.ReceiveTransitionEvent("NoneMove")
+	config = {\
+				"nodes" : [\
+							{"name" : "locomotion", "isDefault" : True, "keepHistory" : True},
+							{"name" : "normal", "isDefault" : True, },
+							{"name" : "idle", "isDefault" : True, "keepHistory" : True},
+							{"name" : "idle_special", "isDefault" : True, },
+							{"name" : "idle_special_1", "isDefault" : True, },
+							{"name" : "idle_special_2", "isDefault" : True, },
+							{"name" : "idle_normal", },
+							{"name" : "move", "keepHistory" : True},
+							{"name" : "move_normal", "isDefault" : True},
+							{"name" : "move_fast", },
+							{"name" : "nonemove", },
+							{"name" : "behavior", "isDefault" : True},
+							{"name" : "skill", },
+							{"name" : "forcetrans", },
+							{"name" : "blow", "isDefault" : True},
+							{"name" : "knockdown", },
+							{"name" : "behavioridle", "isDefault" : True},
+						],
+				"relations" : {\
+							"locomotion" : ("normal", "nonemove"),
+							"normal" : ("idle", "move"),
+							"idle" : ("idle_special", "idle_normal"),
+							"idle_special" : ("idle_special_1", "idle_special_2"),
+							"move" : ("move_normal", "move_fast"),
+							"behavior" : ("skill", "forcetrans", "behavioridle"),
+							"forcetrans" : ("blow", "knockdown"),
+						},
+				"transitions" : [\
+						("normal", "EventNoneNormal", "nonemove"),
+						("behavioridle", "EventNoneNormal", "knockdown"),
+						("nonemove", "EventNoneNormal", "normal"),
+						("nonemove", "EventIdleNormal", "idle_normal"),
+				],
+		}
+	machine.InitFromConfig(config)
 	print(machine.GetCurrentActiveNodesName())
-	print("-------")
-	machine.ReceiveTransitionEvent("ToNormal")
+	print("----------------------------------")
+	machine.ReceiveTransitionEvent("EventNoneNormal")
 	print(machine.GetCurrentActiveNodesName())
+	print("----------------------------------")
+	machine.ReceiveTransitionEvent("EventIdleNormal")
+	print(machine.GetCurrentActiveNodesName())
+	print("----------------------------------")
+	machine.ReceiveTransitionEvent("EventNoneNormal")
+	print(machine.GetCurrentActiveNodesName())
+	print("----------------------------------")
+	machine.ReceiveTransitionEvent("EventNoneNormal")
+	print(machine.GetCurrentActiveNodesName())
+	print("----------------------------------")
+
 	
