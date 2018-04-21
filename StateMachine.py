@@ -25,8 +25,23 @@ class StateMachine(object):
 		self._allNodes[name] = node
 		return node
 
-	def TriggerEvent(self, stateName, eventName):
-		print(stateName, eventName)
+	def TriggerEventInner(self, stateName, eventName, globalExtraData, localExtraData):
+		fullName = stateName + "_" + eventName
+		for ob in self._eventObjectList:
+			func = getattr(ob, fullName, None)
+			#在globalExtraData中设置PreventEvent为True,该事件将不再传递
+			#在localExtraData中设置PreventEventToChild为True,该事件将不再传递给当前子节点
+			func and func(globalExtraData, localExtraData)
+
+	def TriggerEvent(self, eventName, skipChild = False):
+		if self._isTransition:
+			raise Exception("cannot trigger event when transition")
+		
+		globalExtraData = {}
+		for node in self._activeNodeList:
+			if not globalExtraData.get("PreventEvent"):
+				localExtraData = {}
+				node.TriggerEvent(eventName, skipChild, globalExtraData, localExtraData)
 
 	def ActiveStateMachine(self):
 		for name, node in self._allNodes.items():
@@ -131,4 +146,20 @@ if __name__ == "__main__":
 	print(machine.GetCurrentActiveNodesName())
 	print("----------------------------------")
 
-	
+	class A(object):
+		def behavior_event1(self, globalExtraData, localExtraData):
+			print("behavior_event1")
+			localExtraData["PreventEventToChild"] = True
+		
+		def forcetrans_event1(self, globalExtraData, localExtraData):
+			print("forcetrans_event1")
+
+		def behavior_event2(self, globalExtraData, localExtraData):
+			print("behavior_event2")
+
+		def forcetrans_event2(self, globalExtraData, localExtraData):
+			print("forcetrans_event2")
+
+	machine.AddEventObject(A())
+	machine.TriggerEvent("event1")
+	machine.TriggerEvent("event2")
