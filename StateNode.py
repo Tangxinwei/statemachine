@@ -49,19 +49,19 @@ class StateNode(object):
 		for node in self._activeNodeList:
 			node.OnActiveStateMachine()
 
-	def TriggerEvent(self, eventName, skipChild, globalExtraData, localExtraData):
-		self._machine.TriggerEventInner(self._name, eventName, globalExtraData, localExtraData)
+	def TriggerEvent(self, eventName, skipChild, globalExtraData, localExtraData, eventData):
+		self._machine.TriggerEventInner(self._name, eventName, globalExtraData, localExtraData, eventData)
 		if not skipChild and not globalExtraData.get("PreventEvent") and not localExtraData.get("PreventEventToChild"):
 			for node in self._activeNodeList:
-				node.TriggerEvent(eventName, skipChild, globalExtraData, localExtraData)
+				node.TriggerEvent(eventName, skipChild, globalExtraData, localExtraData, eventData)
 
 	def On_Entry(self):
 		self._isActive = True
-		self._machine.TriggerEventInner(self._name, "Entry", {}, {})
+		self._machine.TriggerEventInner(self._name, "Entry", {}, {}, {})
 
 	def On_Exit(self):
 		self._isActive = False
-		self._machine.TriggerEventInner(self._name, "Exit", {}, {})
+		self._machine.TriggerEventInner(self._name, "Exit", {}, {}, {})
 
 	def TriggerAllExit(self):
 		for node in self._activeNodeList:
